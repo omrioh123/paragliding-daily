@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ניהול רחיפות מצנחי רחיפה</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel (לתרגום JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+    
+    <!-- קוד האפליקציה מוטמע ישירות בקובץ HTML -->
+    <script type="text/babel">
+        // React וההוקים שלו כבר זמינים דרך הספרייה שטענו ב-HTML
+        const { useState, useEffect } = React;
+
+        function ParaGlidingApp() {
+          // State management
+          const [instructors, setInstructors] = useState([]);
+          const [newInstructorName, setNewInstructorName] = useState('');
+          const [flights, setFlights] = useState([]);
+          const [newFlight, setNewFlight] = useState({
+            instructor: '',
+            client: '',
+            duration: '10',
+            photo: false
+          });
+          const [view, setView] = useState('main'); // main, byClient, byInstructor, byPhoto
+          const [clientFilter, setClientFilter] = useState('');
+          const [instructorFilter, setInstructorFilter] = useState('');
+          const [showInstructors, setShowInstructors] = useState(false);
+
+          // Payment constants
+          const INSTRUCTOR_PAY = {
+            '10': 100,  // 100₪ for 10 minutes
+            '20': 150,  // 150₪ for 20 minutes
+            'photo': 50 // 50₪ for photo
+          };
+          
+          const CLIENT_PRICE = {
+            '10': 250,  // 250₪ for 10 minutes
+            '20': 350,  // 350₪ for 20 minutes
+            'photo': 100 // 100₪ for photo
+          };
+
+          // Load data from localStorage on mount
+          useEffect(() => {
+            const savedInstructors = localStorage.getItem('instructors');
+            const savedFlights = localStorage.getItem('flights');
+            
+            if (savedInstructors) setInstructors(JSON.parse(savedInstructors));
+            if (savedFlights) setFlights(JSON.parse(savedFlights));
+          }, []);
+
+          // Save data to localStorage whenever it changes
+          useEffect(() => {
+            localStorage.setItem('instructors', JSON.stringify(instructors));
+          }, [instructors]);
+
+          useEffect(() => {
+            localStorage.setItem('flights', JSON.stringify(flights));
+          }, [flights]);
+
+          // Add instructor
+          const addInstructor = () => {
+            if (newInstructorName.trim()) {
+              setInstructors([...instructors, newInstructorName.trim()]);
+              setNewInstructorName('');
+            }
+          };
+
+          // Remove instructor
+          const removeInstructor = (index) => {
+            const updatedInstructors = [...instructors];
+            updatedInstructors.splice(index, 1);
+            setInstructors(updatedInstructors);
+          };
+
+          // Add flight with today's date
+          const addFlight = () => {
+            if (newFlight.instructor && newFlight.client) {
+              const today = new Date().toISOString().split('T')[0];
+              setFlights([...flights, {...newFlight, id: Date.now(), date: today}]);
+              setNewFlight({
+                instructor: '',
+                client: '',
+                duration: '10',
+                photo: false
+              });
+            } else {
+              alert('נא למלא לפחות שם מדריך ושם לקוח');
+            }
+          };
+
+          // Get unique clients and instructors
+          const uniqueClients = [...new Set(flights.map(flight => flight.client))];
+          const uniqueInstructors = [...new Set(flights.map(flight => flight.instructor))];
+
+          // Filter flights by client or instructor
+          const flightsByClient = (client) => {
+            return flights.filter(flight => flight.client === client);
+          };
+          
+          const flightsByInstructor = (instructor) => {
+            return flights.filter(flight => flight.instructor === instructor);
+          };
+
+          // Filter flights by photo
+          const flightsByPhoto = () => {
+            return flights.filter(flight => flight.photo);
+          };
+          
+          // Calculate client summary with pricing
+          const clientSummary = (client) => {
+            const clientFlights = flightsByClient(client);
+            const totalFlights = clientFlights.length;
+            const totalMinutes = clientFlights.reduce((sum, flight) => sum + parseInt(flight.duration), 0);
+            const photoCount = clientFlights.filter(flight => flight.photo).length;
+            
+            // Calculate total price
+            const flightsCost = clientFlights.reduce((sum, flight) => 
+              sum + CLIENT_PRICE[flight.duration], 0);
+            const photosCost = photoCount * CLIENT_PRICE.photo;
+            const totalCost = flightsCost + photosCost;
+            
+            return { totalFlights, totalMinutes, photoCount, totalCost, flightsCost, photosCost };
+          };
+          
+          // Calculate instructor summary with payment
+          const instructorSummary = (instructor) => {
+            const instructorFlights = flightsByInstructor(instructor);
+            const totalFlights = instructorFlights.length;
+            const flightsByDuration = {
+              '10': instructorFlights.filter(flight => flight.duration === '10').length,
+              '20': instructorFlights.filter(flight => flight.duration === '20').length
+            };
+            const photoCount = instructorFlights.filter(flight => flight.photo).length;
+            
+            // Calculate payment
+            const flightsPayment = (flightsByDuration['10'] * INSTRUCTOR_PAY['10']) + 
+                                  (flightsByDuration['20'] * INSTRUCTOR_PAY['20']);
+            const photosPayment = photoCount * INSTRUCTOR_PAY.photo;
+            const totalPayment = flightsPayment + photosPayment;
+            
+            return { 
+              totalFlights, 
+              flightsByDuration, 
+              photoCount, 
+              totalPayment, 
+              flightsPayment, 
+              photosPayment 
+            };
+          };
+
+          // Toggle instructor management visibility
+          const toggleInstructors = () => {
+            setShowInstructors(!showInstructors);
+          };
+
+          return (
+            <div dir="rtl" className="bg-gray-100 min-h-screen p-4">
+              <h1 className="text-2xl font-bold text-center text-blue-600 mb-6">ניהול רחיפות מצנחי רחיפה</h1>
+              
+              {/* Navigation */}
+              <div className="flex flex-wrap justify-center gap-2 mb-6">
+                <button 
+                  onClick={() => setView('main')} 
+                  className={`px-3 py-2 rounded text-sm ${view === 'main' ? 'bg-blue-600 text-white' : 'bg-blue-200'}`}
+                >
+                  ראשי
+                </button>
+                <button 
+                  onClick={() => setView('byClient')} 
+                  className={`px-3 py-2 rounded text-sm ${view === 'byClient' ? 'bg-blue-600 text-white' : 'bg-blue-200'}`}
+                >
+                  לפי לקוח
+                </button>
+                <button 
+                  onClick={() => setView('byInstructor')} 
+                  className={`px-3 py-2 rounded text-sm ${view === 'byInstructor' ? 'bg-blue-600 text-white' : 'bg-blue-200'}`}
+                >
+                  לפי מדריך
+                </button>
+                <button 
+                  onClick={() => setView('byPhoto')} 
+                  className={`px-3 py-2 rounded text-sm ${view === 'byPhoto' ? 'bg-blue-600 text-white' : 'bg-blue-200'}`}
+                >
+                  צילומים
+                </button>
+              </div>
+
+              {/* Main View */}
+              {view === 'main' && (
+                <div className="space-y-8">
+                  {/* Instructors Management - Collapsible */}
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <button 
+                      onClick={toggleInstructors}
+                      className="w-full flex justify-between items-center"
+                    >
+                      <h2 className="text-xl font-semibold">ניהול מדריכים</h2>
+                      <span>{showInstructors ? '▲' : '▼'}</span>
+                    </button>
+                    
+                    {showInstructors && (
+                      <div className="mt-4">
+                        <div className="flex mb-4">
+                          <input
+                            type="text"
+                            placeholder="שם המדריך החדש"
+                            value={newInstructorName}
+                            onChange={(e) => setNewInstructorName(e.target.value)}
+                            className="flex-grow border rounded p-2 ml-2"
+                          />
+                          <button 
+                            onClick={addInstructor}
+                            className="bg-green-500 text-white px-4 py-2 rounded"
+                          >
+                            הוסף
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {instructors.length === 0 ? (
+                            <p className="text-gray-500">אין מדריכים ברשימה</p>
+                          ) : (
+                            instructors.map((instructor, index) => (
+                              <div key={index} className="flex justify-between items-center bg-gray-50 p-2 rounded">
+                                <span>{instructor}</span>
+                                <button 
+                                  onClick={() => removeInstructor(index)}
+                                  className="bg-red-500 text-white px-2 py-1 rounded text-sm"
+                                >
+                                  מחק
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* New Flight Form */}
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <h2 className="text-xl font-semibold mb-4">הוספת רחיפה חדשה</h2>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block mb-1">מדריך:</label>
+                        <select
+                          value={newFlight.instructor}
+                          onChange={(e) => setNewFlight({...newFlight, instructor: e.target.value})}
+                          className="w-full border rounded p-2"
+                        >
+                          <option value="">בחר מדריך</option>
+                          {instructors.map((instructor, index) => (
+                            <option key={index} value={instructor}>{instructor}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block mb-1">לקוח:</label>
+                        <input
+                          type="text"
+                          placeholder="שם הלקוח"
+                          value={newFlight.client}
+                          onChange={(e) => setNewFlight({...newFlight, client: e.target.value})}
+                          className="w-full border rounded p-2"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block mb-1">משך רחיפה:</label>
+                        <select
+                          value={newFlight.duration}
+                          onChange={(e) => setNewFlight({...newFlight, duration: e.target.value})}
+                          className="w-full border rounded p-2"
+                        >
+                          <option value="10">10 דקות</option>
+                          <option value="20">20 דקות</option>
+                        </select>
+                      </div>
+                      
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={newFlight.photo}
+                          onChange={(e) => setNewFlight({...newFlight, photo: e.target.checked})}
+                          className="mr-2 h-5 w-5"
+                        />
+                        <label>צילום</label>
+                      </div>
+                      
+                      <button
+                        onClick={addFlight}
+                        className="w-full bg-blue-500 text-white px-4 py-2 rounded mt-2"
+                      >
+                        הוסף רחיפה
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Recent Flights */}
+                  <div className="bg-white p-4 rounded-lg shadow">
+                    <h2 className="text-xl font-semibold mb-4">רחיפות אחרונות</h2>
+                    
+                    <div className="space-y-2">
+                      {flights.length === 0 ? (
+                        <p className="text-gray-500">אין רחיפות ברשימה</p>
+                      ) : (
+                        flights.slice(-5).reverse().map((flight) => (
+                          <div key={flight.id} className="bg-gray-50 p-3 rounded">
+                            <div className="flex justify-between">
+                              <span className="font-semibold">{flight.date}</span>
+                              <span>{flight.photo ? '📷' : ''}</span>
+                            </div>
+                            <div>לקוח: {flight.client}</div>
+                            <div>מדריך: {flight.instructor}</div>
+                            <div>משך: {flight.duration} דקות</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    
+                    <div className="mt-4 text-center text-gray-500">
+                      {flights.length > 5 ? `+ עוד ${flights.length - 5} רחיפות` : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
